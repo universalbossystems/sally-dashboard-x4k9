@@ -56,12 +56,18 @@
   .mem{border-bottom:1px solid var(--line);padding:10px 0} .mem:last-child{border-bottom:0}
   .mem b{font-size:15px} .mem p{color:var(--text);font-size:14px;margin:4px 0;line-height:1.4}
   .acts{display:flex;gap:8px;margin-top:6px}
+  .accept{position:absolute;left:12px;right:12px;bottom:calc(158px + env(safe-area-inset-bottom));max-height:52%;overflow:auto;z-index:9;border-radius:18px;
+          border:2px solid transparent;background:linear-gradient(#0a0f1a,#0a0f1a) padding-box,linear-gradient(90deg,var(--cyan),var(--mag)) border-box;padding:14px;display:none}
+  .askhead{color:var(--cyan);font-size:12px;letter-spacing:.6px;text-transform:uppercase;margin-bottom:6px}
+  .askdetail{color:var(--dim);font-size:14px;line-height:1.45;margin-top:6px;white-space:pre-wrap}
+  .askbtn{flex:1;margin:0;padding:13px}
 </style>
 </head>
 <body>
 <div class="app">
   <div class="hero" role="img" aria-label="Sally"></div>
   <img class="brand" src="logo.png" alt="Sally">
+  <div class="accept" id="acceptbox" role="alertdialog" aria-label="Sally needs your decision"></div>
 
   <section class="panel chatp" id="p-chat"><h2>Chat</h2>
     <div id="c-out" style="display:none"></div>
@@ -297,6 +303,31 @@ async function loadHistory(){
     row.append(l, mk("div","when", new Date(r.at).toLocaleString())); list.append(row); });
 }
 
+/* ---- accept box: Sally asks, only Tony answers (founder_list_approvals / founder_decide_approval) ---- */
+let askList = [];
+async function askLoad(){
+  if(!sb || !session){ askList = []; askPaint(); return; }
+  const { data, error } = await sb.rpc("founder_list_approvals", { p_limit: 20 });
+  if(error || !Array.isArray(data)) return;                     // keep what is on screen
+  askList = data.filter(a => a.state === "pending"); askPaint();
+}
+function askPaint(){
+  const box = $("acceptbox"); box.replaceChildren();
+  if(!askList.length){ box.style.display = "none"; return; }
+  const a = askList[0]; box.style.display = "block";
+  box.append(mk("div","askhead","Sally needs your OK" + (askList.length>1 ? " · 1 of "+askList.length : "")), mk("b",null,a.title));
+  if(a.detail) box.append(mk("div","askdetail",a.detail));
+  if(a.on_accept) box.append(mk("div","askdetail","If you accept: "+a.on_accept));
+  if(a.ref) box.append(mk("div","mono",a.ref));
+  const row = mk("div","acts"), yes = mk("button","btn unl askbtn","Accept"), no = mk("button","btn sec askbtn","Decline"), m = mk("div","msg");
+  const decide = async d => { yes.disabled = no.disabled = true; say(m,"Saving…");
+    const { error } = await sb.rpc("founder_decide_approval", { p_id: a.id, p_decision: d });
+    if(error){ yes.disabled = no.disabled = false; say(m, friendly(error), "err"); return; }
+    await askLoad(); };
+  yes.onclick = () => decide("accept"); no.onclick = () => decide("decline");
+  row.append(yes,no); box.append(row,m);
+}
+
 /* ---- settings / session ---- */
 function paintSession(){ setText($("s-who"), session ? "Signed in as "+session.user.email : "Not signed in."); $("s-out").style.display = session ? "block":"none"; }
 $("s-out").onclick = async () => { await sb.auth.signOut(); };
@@ -305,10 +336,11 @@ async function init(){
   if(!window.supabase){ setText($("s-who"),"Could not load the sign-in library. Check your connection."); return; }
   sb = window.supabase.createClient(SB_URL, SB_KEY, { auth:{ persistSession:true, autoRefreshToken:true, detectSessionInUrl:true } });
   const { data } = await sb.auth.getSession(); session = data.session; paintSession();
-  sb.auth.onAuthStateChange((_e, s) => { session = s; paintSession(); lock=null; paintTab();
+  sb.auth.onAuthStateChange((_e, s) => { session = s; paintSession(); lock=null; paintTab(); setTimeout(askLoad, 0);
     if(session && location.hash) history.replaceState(null,"",location.pathname);
     if(session){ if(tab==="access") refresh(); if(tab==="chat") chatLoad(); if(tab==="memory") memInit(); if(tab==="activity") loadHistory(); } });
-  if(session) refresh();
+  if(session){ refresh(); askLoad(); }
+  setInterval(() => { if(session && !document.hidden) askLoad(); }, 10000);
   setInterval(() => { if(session && tab==="access") refresh(); }, 15000);
 }
 show("home"); init();
