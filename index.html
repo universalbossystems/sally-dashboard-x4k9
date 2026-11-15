@@ -6,7 +6,7 @@
 <meta name="robots" content="noindex,nofollow">
 <title>Sally</title>
 <style>
-  :root{--bg:#05070d;--panel:rgba(10,14,24,.92);--line:#1d2b3f;--text:#eef3fb;--dim:#8fa0b8;
+  :root{--bg:#05070d;--panel:rgba(10,14,24,.95);--line:#1d2b3f;--text:#eef3fb;--dim:#8fa0b8;
         --cyan:#19e6f0;--mag:#d43bff;--green:#27f06a;--amber:#ffb020;--red:#ff4d5e}
   *{box-sizing:border-box;margin:0}
   html,body{height:100%;background:var(--bg);color:var(--text);font-family:system-ui,Segoe UI,Roboto,sans-serif}
@@ -16,13 +16,13 @@
   .brand{position:absolute;left:16px;top:calc(8px + env(safe-area-inset-top));width:min(150px,38vw);height:auto;z-index:2;filter:drop-shadow(0 2px 8px #000)}
   .bar{position:absolute;left:12px;right:12px;bottom:calc(86px + env(safe-area-inset-bottom));height:60px;border-radius:30px;
        border:2px solid transparent;background:linear-gradient(#0a0f1a,#0a0f1a) padding-box,linear-gradient(90deg,var(--cyan),var(--mag)) border-box;
-       display:flex;align-items:center;gap:8px;padding:0 8px 0 18px;z-index:3}
+       display:flex;align-items:center;gap:8px;padding:0 8px 0 18px;z-index:6}
   .bar input{flex:1;background:none;border:0;outline:0;color:var(--text);font-size:16px;min-width:0}
   .bar input::placeholder{color:#b9c4d6}
   .rb{width:44px;height:44px;border-radius:50%;border:1.5px solid var(--cyan);background:#0a1220;color:var(--cyan);display:grid;place-items:center;cursor:pointer}
   .rb[disabled]{opacity:.55;cursor:not-allowed}
   .nav{position:absolute;left:10px;right:10px;bottom:calc(8px + env(safe-area-inset-bottom));height:72px;border-radius:22px;border:1.5px solid #1b3a52;background:rgba(8,12,20,.96);
-       display:grid;grid-template-columns:repeat(6,1fr);z-index:4}
+       display:grid;grid-template-columns:repeat(6,1fr);z-index:7}
   .nav button{background:none;border:0;color:var(--text);font-size:11.5px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;position:relative}
   .nav svg{width:26px;height:26px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
   .nav button.on{color:var(--cyan)}
@@ -30,6 +30,7 @@
   #tabAccess.unlocked{color:var(--green)} #tabAccess.locked{color:var(--amber)}
   .panel{position:absolute;inset:0 0 82px 0;background:var(--panel);z-index:5;padding:calc(18px + env(safe-area-inset-top)) 18px 18px;overflow:auto;display:none}
   .panel.show{display:block}
+  .panel.chatp{padding-bottom:84px}
   h2{font-size:22px;margin-bottom:6px} .sub{color:var(--dim);font-size:14px;margin-bottom:16px;line-height:1.45}
   .card{border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px;background:rgba(14,20,34,.7)}
   .big{display:flex;align-items:center;gap:14px}
@@ -41,14 +42,20 @@
   .btn{width:100%;padding:16px;border-radius:14px;border:0;font-size:17px;font-weight:700;cursor:pointer;margin-top:6px}
   .btn.unl{background:var(--green);color:#03150a} .btn.lck{background:var(--amber);color:#1c1200}
   .btn.sec{background:#12203a;color:var(--text);border:1px solid var(--line)}
+  .btn.sm{padding:10px;font-size:14px;width:auto;margin:0}
   .btn[disabled]{opacity:.5}
-  input.t{width:100%;padding:14px;border-radius:12px;border:1px solid var(--line);background:#0a1220;color:var(--text);font-size:16px;margin:8px 0}
+  input.t,textarea.t,select.t{width:100%;padding:12px;border-radius:12px;border:1px solid var(--line);background:#0a1220;color:var(--text);font-size:16px;margin:6px 0;font-family:inherit}
   .msg{font-size:14px;margin-top:10px;min-height:20px} .err{color:var(--red)} .ok{color:var(--green)}
   .row{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);font-size:14px}
   .row:last-child{border-bottom:0} .when{color:var(--dim);white-space:nowrap}
   .pill{display:inline-block;padding:2px 9px;border-radius:99px;font-size:12px;border:1px solid currentColor}
   .mono{font-family:ui-monospace,Consolas,monospace;font-size:13px;color:var(--dim)}
-  .nc{border-style:dashed;color:var(--dim)}
+  .bub{max-width:86%;padding:10px 13px;border-radius:16px;margin:8px 0;font-size:15px;line-height:1.4;white-space:pre-wrap;word-wrap:break-word}
+  .bub.me{margin-left:auto;background:#12315a;border:1px solid #1f4f8c} .bub.sally{background:#1a1230;border:1px solid #4a2a7a}
+  .bub small{display:block;color:var(--dim);font-size:11px;margin-top:4px}
+  .mem{border-bottom:1px solid var(--line);padding:10px 0} .mem:last-child{border-bottom:0}
+  .mem b{font-size:15px} .mem p{color:var(--text);font-size:14px;margin:4px 0;line-height:1.4}
+  .acts{display:flex;gap:8px;margin-top:6px}
 </style>
 </head>
 <body>
@@ -56,10 +63,34 @@
   <div class="hero" role="img" aria-label="Sally"></div>
   <img class="brand" src="logo.png" alt="Sally">
 
-  <section class="panel" id="p-chat"><h2>Chat</h2>
-    <div class="card nc"><b>Not connected yet.</b><div class="sub" style="margin:6px 0 0">Sally's chat needs her runtime online. It is not hosted anywhere yet, so sending is switched off rather than pretending. Nothing you type here is sent or stored.</div></div></section>
+  <section class="panel chatp" id="p-chat"><h2>Chat</h2>
+    <div id="c-out" style="display:none"></div>
+    <div id="c-in" style="display:none">
+      <div id="c-list"></div>
+      <div class="msg" id="c-msg"></div>
+    </div>
+  </section>
+
   <section class="panel" id="p-memory"><h2>Memory</h2>
-    <div class="card nc"><b>Not connected yet.</b><div class="sub" style="margin:6px 0 0">Memory viewing comes after sign-in is proven.</div></div></section>
+    <div id="m-out" style="display:none"></div>
+    <div id="m-in" style="display:none">
+      <div class="card">
+        <b>Save something</b>
+        <select class="t" id="m-kind"><option value="fact">Fact</option><option value="preference">Preference</option><option value="event">Event</option></select>
+        <input class="t" id="m-subject" placeholder="Subject (e.g. coffee)" maxlength="200">
+        <textarea class="t" id="m-content" rows="3" placeholder="What should Sally remember?" maxlength="4000"></textarea>
+        <button class="btn sec" id="m-save">Save to Sally's memory</button>
+      </div>
+      <div class="card">
+        <b>Ask her memory</b>
+        <input class="t" id="m-q" placeholder="Search words, e.g. coffee">
+        <button class="btn sec" id="m-search">Recall</button>
+        <div id="m-hits"></div>
+      </div>
+      <div class="card"><b>What she remembers now</b><div id="m-list"></div></div>
+      <div class="msg" id="m-msg"></div>
+    </div>
+  </section>
 
   <section class="panel" id="p-access"><h2>BOS Access</h2>
     <div class="sub">Tony's lock. It changes Sally's real permissions, not just this screen.</div>
@@ -85,11 +116,11 @@
     <button class="btn sec" id="s-out" style="display:none">Sign out</button>
   </section>
 
-  <div class="bar" id="chatbar">
-    <input id="msgbox" placeholder="Message Sally..." disabled aria-label="Message Sally">
-    <button class="rb" disabled aria-label="Voice (not connected)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
-    <button class="rb" disabled aria-label="Send (not connected)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M21 3 3 10l7 3 3 7z"/></svg></button>
-  </div>
+  <form class="bar" id="chatbar" autocomplete="off">
+    <input id="msgbox" placeholder="Message Sally..." aria-label="Message Sally" maxlength="2000">
+    <button type="button" class="rb" disabled aria-label="Voice (not connected)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+    <button type="submit" class="rb" id="sendbtn" aria-label="Send"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M21 3 3 10l7 3 3 7z"/></svg></button>
+  </form>
 
   <nav class="nav" id="nav">
     <button data-t="home" class="on"><svg viewBox="0 0 24 24"><path d="M3 11 12 3l9 8M5 10v10h14V10"/></svg>Home</button>
@@ -105,58 +136,125 @@
 <script>
 "use strict";
 const SB_URL = "https://nqlrsvfrmljyuvwypojj.supabase.co";
-const SB_KEY = "sb_publishable_Ynv7UAdgJilIankm0EMHJg_KwPlnOWb";      // publishable (browser-safe); data stays behind the Founder-only functions
+const SB_KEY = "sb_publishable_Ynv7UAdgJilIankm0EMHJg_KwPlnOWb";      // publishable (browser-safe); every call below is refused unless the Founder is signed in
 const $ = id => document.getElementById(id);
-let sb = null, session = null, lock = null, busy = false;
+let sb = null, session = null, lock = null, busy = false, tab = "home", chatTimer = null;
 
 const ICON_LOCKED = '<svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
 const ICON_OPEN   = '<svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 7.5-2"/></svg>';
-
 function setText(el, t){ el.textContent = t; }
 function mk(tag, cls, text){ const e=document.createElement(tag); if(cls) e.className=cls; if(text!==undefined) e.textContent=text; return e; }
+function say(el, text, kind){ el.className = "msg"+(kind?" "+kind:""); setText(el, text); }
+function friendly(err){ return err && err.message === "Founder sign-in required" ? "Refused: this sign-in is not the Founder's." : (err ? err.message : ""); }
 
 /* ---- tabs ---- */
 function show(t){
+  tab = t;
   document.querySelectorAll(".nav button").forEach(b => b.classList.toggle("on", b.dataset.t===t));
   document.querySelectorAll(".panel").forEach(p => p.classList.remove("show"));
   if(t!=="home") $("p-"+t).classList.add("show");
   $("chatbar").style.display = (t==="home"||t==="chat") ? "flex" : "none";
-  if(t==="access") refresh(); if(t==="activity") loadHistory();
+  clearInterval(chatTimer);
+  if(t==="access") refresh(); if(t==="activity") loadHistory(); if(t==="memory") memInit();
+  if(t==="chat"){ chatLoad(); chatTimer = setInterval(chatLoad, 8000); }
 }
 $("nav").addEventListener("click", e => { const b=e.target.closest("button"); if(b) show(b.dataset.t); });
 
-/* ---- sign-in (email link; only Tony's confirmed email can use the lock) ---- */
-function signInBox(container, after){
+/* ---- sign-in (email link; only Tony's confirmed email can use anything private) ---- */
+function signInBox(container){
   container.replaceChildren();
   const c = mk("div","card");
-  c.append(mk("b",null,"Sign in as Tony"), mk("div","sub","Enter your email. A sign-in link is sent to you. Only the Founder's email can change the lock."));
+  c.append(mk("b",null,"Sign in as Tony"), mk("div","sub","Enter your email. A sign-in link is sent to you. Only the Founder's email can use this."));
   const em = mk("input","t"); em.type="email"; em.placeholder="your email"; em.autocomplete="email";
   const b = mk("button","btn sec","Send sign-in link"); const m = mk("div","msg");
   b.onclick = async () => {
-    if(!em.value.includes("@")) { m.className="msg err"; setText(m,"Enter your email address."); return; }
-    b.disabled = true; m.className="msg"; setText(m,"Sending…");
+    if(!em.value.includes("@")) return say(m,"Enter your email address.","err");
+    b.disabled = true; say(m,"Sending…");
     const { error } = await sb.auth.signInWithOtp({ email: em.value.trim(), options:{ emailRedirectTo: location.origin + location.pathname, shouldCreateUser: true }});
     b.disabled = false;
-    if(error){ m.className="msg err"; setText(m,"Could not send: "+error.message); }
-    else { m.className="msg ok"; setText(m,"Link sent. Open it on this device."); }
+    error ? say(m,"Could not send: "+error.message,"err") : say(m,"Link sent. Open it on this device.","ok");
   };
   c.append(em,b,m); container.append(c);
 }
+function gate(inId, outId){ const s=!!session; $(inId).style.display = s?"block":"none"; $(outId).style.display = s?"none":"block"; if(!s) signInBox($(outId)); return s; }
+
+/* ---- chat ---- */
+async function chatLoad(){
+  if(!sb || !gate("c-in","c-out")) return;
+  const { data, error } = await sb.rpc("founder_chat_history", { p_limit: 60 });
+  if(error) return say($("c-msg"), friendly(error), "err");
+  const list = $("c-list"); const box = list.parentElement.parentElement;
+  const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+  list.replaceChildren();
+  if(!data.messages.length) list.append(mk("div","sub","Say hello. Sally answers from her hosted home; nothing runs on your PC or Mac."));
+  data.messages.forEach(m => { const b = mk("div","bub "+(m.speaker==="sally"?"sally":"me"), m.text);
+    b.append(mk("small",null, new Date(m.at).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}) + (m.model_used ? " · "+m.model_used : "") + (m.state==="pending"||m.state==="claimed" ? " · waiting for Sally" : "")));
+    list.append(b); });
+  say($("c-msg"), data.waiting>0 ? "Sally has "+data.waiting+" message(s) waiting. Her hosted runtime checks about every 30 minutes." : "");
+  if(atBottom) box.scrollTop = box.scrollHeight;
+}
+$("chatbar").addEventListener("submit", async e => {
+  e.preventDefault(); const text = $("msgbox").value.trim(); if(!text || !sb) return;
+  if(!session){ show("chat"); return; }
+  $("sendbtn").disabled = true;
+  const { error } = await sb.rpc("founder_chat_send", { p_text: text });
+  $("sendbtn").disabled = false;
+  if(error){ show("chat"); say($("c-msg"), friendly(error), "err"); return; }
+  $("msgbox").value = ""; show("chat");
+});
+
+/* ---- memory (Sally's existing sally_remember / recall_text / correct / forget) ---- */
+function memRow(m, withActs){
+  const d = mk("div","mem"); d.append(mk("b",null,m.subject+" "), mk("span","pill",m.kind), mk("p",null,m.content));
+  if(withActs){
+    const a = mk("div","acts"), c = mk("button","btn sec sm","Correct"), f = mk("button","btn sec sm","Forget");
+    c.onclick = async () => { const nv = prompt("Correct this memory to:", m.content); if(nv===null) return;
+      const { error } = await sb.rpc("founder_memory_correct", { p_id: m.id, p_new_content: nv, p_reason: "corrected from dashboard" });
+      error ? say($("m-msg"), friendly(error), "err") : (say($("m-msg"),"Corrected. The old wording is kept as history.","ok"), memInit()); };
+    f.onclick = async () => { if(!confirm("Forget this memory?")) return;
+      const { error } = await sb.rpc("founder_memory_forget", { p_id: m.id, p_reason: "forgotten from dashboard" });
+      error ? say($("m-msg"), friendly(error), "err") : (say($("m-msg"),"Forgotten.","ok"), memInit()); };
+    a.append(c,f); d.append(a);
+  }
+  return d;
+}
+async function memInit(){
+  if(!sb || !gate("m-in","m-out")) return;
+  const { data, error } = await sb.rpc("founder_memory_list", { p_limit: 100 });
+  const list = $("m-list"); list.replaceChildren();
+  if(error) return say($("m-msg"), friendly(error), "err");
+  if(!data.length) list.append(mk("div","sub","Nothing yet."));
+  data.forEach(m => list.append(memRow(m, true)));
+}
+$("m-save").onclick = async () => {
+  const subject=$("m-subject").value.trim(), content=$("m-content").value.trim();
+  if(!subject || !content) return say($("m-msg"),"Add a subject and what to remember.","err");
+  $("m-save").disabled = true;
+  const { data, error } = await sb.rpc("founder_memory_remember", { p_kind: $("m-kind").value, p_subject: subject, p_content: content });
+  $("m-save").disabled = false;
+  if(error) return say($("m-msg"), friendly(error), "err");
+  $("m-subject").value=""; $("m-content").value=""; say($("m-msg"),"Saved (memory #"+data.id+").","ok"); memInit();
+};
+$("m-search").onclick = async () => {
+  const q = $("m-q").value.trim(); if(!q) return;
+  const { data, error } = await sb.rpc("founder_memory_recall", { p_query: q, p_limit: 8 });
+  const box = $("m-hits"); box.replaceChildren();
+  if(error) return say($("m-msg"), friendly(error), "err");
+  if(!data.length) box.append(mk("div","sub","Nothing matches."));
+  data.forEach(m => box.append(memRow(m, false)));
+};
 
 /* ---- lock ---- */
 function paintTab(){
-  const t=$("tabAccess"); t.classList.remove("locked","unlocked");
-  if(lock) t.classList.add(lock.state);
+  const t=$("tabAccess"); t.classList.remove("locked","unlocked"); if(lock) t.classList.add(lock.state);
   $("tabIcon").innerHTML = (lock && lock.state==="unlocked" ? ICON_OPEN : ICON_LOCKED).replace(/^<svg[^>]*>|<\/svg>$/g,"");
 }
 async function refresh(){
   if(!sb) return;
-  const signed = !!session;
-  $("a-in").style.display = signed ? "block":"none"; $("a-out").style.display = signed ? "none":"block";
-  if(!signed){ signInBox($("a-out")); return; }
+  if(!gate("a-in","a-out")) return;
   const { data, error } = await sb.rpc("sally_lock_status");
   if(error || !data){ lock=null; paintTab(); setText($("a-state"),"Cannot read the lock"); $("a-state").className="st unk-c";
-    setText($("a-msg"), error ? error.message : "No answer."); $("a-msg").className="msg err"; $("a-btn").disabled=true; return; }
+    say($("a-msg"), error ? error.message : "No answer.", "err"); $("a-btn").disabled=true; return; }
   lock = data; paintTab();
   const un = data.state==="unlocked";
   $("a-icon").innerHTML = un ? ICON_OPEN : ICON_LOCKED; $("a-icon").className = "lockicon "+(un?"unlocked-c":"locked-c");
@@ -176,19 +274,16 @@ $("a-btn").onclick = async () => {
   if(!lock || busy) return;
   const to = lock.state==="unlocked" ? "locked" : "unlocked";
   if(to==="unlocked" && !confirm("Unlock? Sally gets full Founder-delegated access until you lock again.")) return;
-  busy = true; $("a-btn").disabled = true; setText($("a-msg"),"Changing…"); $("a-msg").className="msg";
+  busy = true; $("a-btn").disabled = true; say($("a-msg"),"Changing…");
   const { error } = await sb.rpc("founder_set_lock", { p_state: to, p_note: "dashboard" });
   busy = false;
-  if(error){ setText($("a-msg"), error.message==="Founder sign-in required" ? "Refused: this sign-in is not the Founder's." : "Refused: "+error.message); $("a-msg").className="msg err"; }
-  else { setText($("a-msg"), to==="locked" ? "Locked. The extra access is gone now." : "Unlocked. Full authority restored."); $("a-msg").className="msg ok"; }
+  error ? say($("a-msg"), friendly(error), "err") : say($("a-msg"), to==="locked" ? "Locked. The extra access is gone now." : "Unlocked. Full authority restored.", "ok");
   await refresh();
 };
 
 /* ---- activity ---- */
 async function loadHistory(){
-  if(!sb) return; const signed = !!session;
-  $("act-in").style.display = signed?"block":"none"; $("act-out").style.display = signed?"none":"block";
-  if(!signed){ signInBox($("act-out")); return; }
+  if(!sb || !gate("act-in","act-out")) return;
   const { data, error } = await sb.rpc("founder_lock_history", { p_limit: 30 });
   const list = $("act-list"); list.replaceChildren();
   if(error){ setText($("act-msg"), error.message); return; } setText($("act-msg"),"");
@@ -201,10 +296,7 @@ async function loadHistory(){
 }
 
 /* ---- settings / session ---- */
-function paintSession(){
-  setText($("s-who"), session ? "Signed in as "+session.user.email : "Not signed in.");
-  $("s-out").style.display = session ? "block":"none";
-}
+function paintSession(){ setText($("s-who"), session ? "Signed in as "+session.user.email : "Not signed in."); $("s-out").style.display = session ? "block":"none"; }
 $("s-out").onclick = async () => { await sb.auth.signOut(); };
 
 async function init(){
@@ -212,9 +304,10 @@ async function init(){
   sb = window.supabase.createClient(SB_URL, SB_KEY, { auth:{ persistSession:true, autoRefreshToken:true, detectSessionInUrl:true } });
   const { data } = await sb.auth.getSession(); session = data.session; paintSession();
   sb.auth.onAuthStateChange((_e, s) => { session = s; paintSession(); lock=null; paintTab();
-    if(session && location.hash) history.replaceState(null,"",location.pathname); if(session) refresh(); });
+    if(session && location.hash) history.replaceState(null,"",location.pathname);
+    if(session){ if(tab==="access") refresh(); if(tab==="chat") chatLoad(); if(tab==="memory") memInit(); if(tab==="activity") loadHistory(); } });
   if(session) refresh();
-  setInterval(() => { if(session && $("p-access").classList.contains("show")) refresh(); }, 15000);
+  setInterval(() => { if(session && tab==="access") refresh(); }, 15000);
 }
 show("home"); init();
 </script>
