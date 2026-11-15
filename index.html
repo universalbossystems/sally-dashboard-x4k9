@@ -270,10 +270,10 @@ async function refresh(){
   setText($("a-when"), "since "+new Date(data.changed_at).toLocaleString()+" · by "+data.changed_by);
   const rules = $("a-rules"); rules.replaceChildren();
   (un ? ["Sally has full Founder-delegated authority to carry out your instructions.",
-         "Cloud 1 management, GitHub self-development, protected records and BOS access are all open to her.",
+         "BOS organisational resources are open to her for development work.",
          "Her normal operation is exactly the same as when locked."]
       : ["Sally operates normally as your personal AI: tools, skills, memory, AI resources and development.",
-         "Protected areas (Cloud 1 management, protected records, BOS) are read only.",
+         "Only BOS organisational resources are closed to her.",
          "Nothing she does day to day is interrupted."]).forEach(t => rules.append(mk("li",null,t)));
   const b = $("a-btn"); b.disabled = busy; b.className = "btn "+(un?"lck":"unl");
   setText(b, un ? "🔒  Lock now" : "🔓  Unlock for Tony's instructions");
