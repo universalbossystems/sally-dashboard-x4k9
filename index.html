@@ -308,7 +308,11 @@ let askList = [];
 async function askLoad(){
   if(!sb || !session){ askList = []; askPaint(); return; }
   const { data, error } = await sb.rpc("founder_list_approvals", { p_limit: 20 });
-  if(error || !Array.isArray(data)) return;                     // keep what is on screen
+  if(error || !Array.isArray(data)){                             // say so instead of staying silent
+    const box = $("acceptbox"); box.replaceChildren(); box.style.display = "block";
+    box.append(mk("div","askhead","Sally's requests"), mk("div","askdetail","Could not load them: " + (error ? friendly(error) : "unexpected answer") + ". Reload the page, or sign in again from BOS Access."));
+    return;
+  }
   askList = data.filter(a => a.state === "pending"); askPaint();
 }
 function askPaint(){
