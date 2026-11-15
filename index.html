@@ -21,6 +21,10 @@
   .bar input::placeholder{color:#b9c4d6}
   .rb{width:44px;height:44px;border-radius:50%;border:1.5px solid var(--cyan);background:#0a1220;color:var(--cyan);display:grid;place-items:center;cursor:pointer}
   .rb[disabled]{opacity:.55;cursor:not-allowed}
+  .rb.on{background:var(--cyan);color:#001b1d}
+  .rb.pulse{animation:vpulse 1.2s infinite}
+  @keyframes vpulse{0%,100%{box-shadow:0 0 0 0 rgba(25,230,240,.55)}50%{box-shadow:0 0 0 9px rgba(25,230,240,0)}}
+  @media (prefers-reduced-motion:reduce){.rb.pulse{animation:none}}
   .nav{position:absolute;left:10px;right:10px;bottom:calc(8px + env(safe-area-inset-bottom));height:72px;border-radius:22px;border:1.5px solid #1b3a52;background:rgba(8,12,20,.96);
        display:grid;grid-template-columns:repeat(6,1fr);z-index:7}
   .nav button{background:none;border:0;color:var(--text);font-size:11.5px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;position:relative}
@@ -44,6 +48,9 @@
   .btn.sec{background:#12203a;color:var(--text);border:1px solid var(--line)}
   .btn.sm{padding:10px;font-size:14px;width:auto;margin:0}
   .btn[disabled]{opacity:.5}
+  .panel select.t{-webkit-appearance:none;appearance:none;background-color:#0a1220;color:var(--text);padding-right:36px;
+           background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='9' viewBox='0 0 14 9'%3E%3Cpath d='M1 1l6 6 6-6' fill='none' stroke='%238fa0b8' stroke-width='2'/%3E%3C/svg%3E");
+           background-repeat:no-repeat;background-position:right 14px center}
   input.t,textarea.t,select.t{width:100%;padding:12px;border-radius:12px;border:1px solid var(--line);background:#0a1220;color:var(--text);font-size:16px;margin:6px 0;font-family:inherit}
   .msg{font-size:14px;margin-top:10px;min-height:20px} .err{color:var(--red)} .ok{color:var(--green)}
   .row{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);font-size:14px}
@@ -124,7 +131,7 @@
 
   <form class="bar" id="chatbar" autocomplete="off">
     <input id="msgbox" placeholder="Message Sally..." aria-label="Message Sally" maxlength="2000">
-    <button type="button" class="rb" disabled aria-label="Voice (not connected)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+    <button type="button" class="rb" id="voicebtn" aria-label="Talk to Sally"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
     <button type="submit" class="rb" id="sendbtn" aria-label="Send"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M21 3 3 10l7 3 3 7z"/></svg></button>
   </form>
 
@@ -331,6 +338,118 @@ function askPaint(){
   yes.onclick = () => decide("accept"); no.onclick = () => decide("decline");
   row.append(yes,no); box.append(row,m);
 }
+
+/* ---- voice to voice: the browser's own FREE speech recognition and speech synthesis (no service, no key, no cost) ----
+   tap the mic, talk -> text -> the same chat as typing -> Sally's reply is read aloud. Optional hands-free loop. */
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem("sally."+k); return v===null ? d : JSON.parse(v); }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem("sally."+k, JSON.stringify(v)); }catch(e){} }
+};
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition, TTS = window.speechSynthesis;
+const V = { ok: !!(SR && TTS), state: "idle", rec: null, poll: null, handsFree: store.get("handsFree", false), voiceName: store.get("voiceName", "") };
+const PLACE = { idle:"Message Sally...", listening:"Listening…", thinking:"Sally is thinking…", speaking:"Sally is speaking…" };
+function vState(s){
+  V.state = s; $("msgbox").placeholder = PLACE[s];
+  const b = $("voicebtn"); b.classList.toggle("on", s==="listening"||s==="speaking"); b.classList.toggle("pulse", s==="listening"||s==="thinking");
+  b.setAttribute("aria-label", s==="idle" ? "Talk to Sally" : "Stop");
+}
+function vNote(text){ show("chat"); say($("c-msg"), text, "err"); }
+function pickVoice(){
+  const vs = TTS.getVoices(); if(!vs.length) return null;
+  const named = V.voiceName && vs.find(v => v.name === V.voiceName); if(named) return named;
+  const rank = v => (/^en[-_]GB/i.test(v.lang) ? 4 : /^en/i.test(v.lang) ? 2 : 0) + (/female|kate|serena|hazel|libby|sonia|samantha|karen|moira|tessa|fiona|susan|zira/i.test(v.name) ? 3 : 0);
+  return vs.slice().sort((a,b) => rank(b)-rank(a))[0];
+}
+function cleanForSpeech(t){
+  return String(t).replace(/```[\s\S]*?```/g," (a code block) ").replace(/`([^`]*)`/g,"$1").replace(/https?:\/\/\S+/g," a link ").replace(/[*_#>~]+/g,"").replace(/\s+/g," ").trim();
+}
+function chunks(t){                                                  // short pieces: long utterances are cut off by some browsers
+  const out = []; (t.match(/[^.!?\n]+[.!?]*\s*/g) || [t]).forEach(s => {
+    while(s.length > 220){ let i = s.lastIndexOf(" ", 220); if(i < 80) i = 220; out.push(s.slice(0,i)); s = s.slice(i); }
+    if(s.trim()) out.push(s); });
+  return out;
+}
+function speak(text){
+  const parts = chunks(cleanForSpeech(text)); if(!parts.length){ vState("idle"); return; }
+  TTS.cancel(); vState("speaking"); const v = pickVoice();
+  parts.forEach((p, i) => {
+    const u = new SpeechSynthesisUtterance(p); if(v){ u.voice = v; u.lang = v.lang; } else u.lang = "en-GB";
+    if(i === parts.length-1){
+      u.onend = () => { if(V.state === "speaking"){ vState("idle"); if(V.handsFree) listen(); } };
+      u.onerror = () => { if(V.state === "speaking") vState("idle"); };
+    }
+    TTS.speak(u);
+  });
+}
+async function sendVoice(text){
+  vState("thinking"); show("chat");
+  const { data, error } = await sb.rpc("founder_chat_send", { p_text: text });
+  if(error){ vState("idle"); say($("c-msg"), friendly(error), "err"); return; }
+  $("msgbox").value = "";
+  awaitReply((data && data.id) || 0, Date.now() + 180000);
+}
+function awaitReply(sentId, deadline){
+  clearTimeout(V.poll);
+  const tick = async () => {
+    if(V.state !== "thinking") return;                                 // she was stopped
+    if(Date.now() > deadline){ vState("idle"); say($("c-msg"), "She has not answered yet, so I will stay quiet.", "err"); return; }
+    const { data } = await sb.rpc("founder_chat_history", { p_limit: 12 });
+    const r = data && data.messages && data.messages.filter(m => m.speaker === "sally" && m.id > sentId).pop();
+    if(r){ speak(r.text); chatLoad(); return; }
+    V.poll = setTimeout(tick, 2500);
+  };
+  tick();
+}
+function listen(){
+  if(!V.ok) return;
+  if(!session){ vNote("Sign in first (BOS Access), then tap the microphone."); return; }
+  const rec = new SR(); V.rec = rec; rec.lang = "en-GB"; rec.interimResults = true; rec.maxAlternatives = 1; rec.continuous = false;
+  let finalText = "";
+  rec.onstart = () => vState("listening");
+  rec.onresult = e => {
+    let interim = "";
+    for(let i = e.resultIndex; i < e.results.length; i++){ const r = e.results[i]; if(r.isFinal) finalText += r[0].transcript; else interim += r[0].transcript; }
+    $("msgbox").value = (finalText + interim).trim();
+  };
+  rec.onerror = e => {
+    if(V.rec !== rec) return; V.rec = null; vState("idle");
+    if(e.error === "not-allowed" || e.error === "service-not-allowed") vNote("Allow the microphone for this page, then tap the microphone again.");
+    else if(e.error !== "no-speech" && e.error !== "aborted") vNote("I could not hear that (" + e.error + ").");
+  };
+  rec.onend = () => {
+    if(V.rec !== rec) return; V.rec = null;
+    const t = (finalText || $("msgbox").value).trim();
+    if(V.state === "listening"){ if(t) sendVoice(t); else vState("idle"); }
+  };
+  try{ rec.start(); }catch(err){ V.rec = null; vState("idle"); }
+}
+$("voicebtn").onclick = () => {
+  if(!V.ok) return;
+  if(V.state === "speaking"){ vState("idle"); TTS.cancel(); return; }
+  if(V.state === "listening"){ const r = V.rec; V.rec = null; vState("idle"); try{ r && r.abort(); }catch(e){} return; }
+  if(V.state === "thinking"){ vState("idle"); clearTimeout(V.poll); return; }
+  try{ const u = new SpeechSynthesisUtterance(""); u.volume = 0; TTS.speak(u); }catch(e){}   // unlocks speech on iPhone (needs this tap)
+  listen();
+};
+(function voiceInit(){
+  const b = $("voicebtn"), card = mk("div","card");
+  card.append(mk("b",null,"Voice"));
+  if(!V.ok){
+    b.disabled = true; b.setAttribute("aria-label","Voice is not supported by this browser");
+    card.append(mk("div","sub","This browser has no built-in speech support. Safari on iPhone and Chrome or Edge on a computer do."));
+    $("p-settings").append(card); return;
+  }
+  card.append(mk("div","sub","Tap the microphone, talk, and Sally answers out loud. It uses your browser's free speech services (Chrome sends the audio to Google, Safari to Apple). Sally stores only the text, as in any chat. No cost, no key."));
+  const hf = mk("label","sub"), cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = V.handsFree;
+  cb.onchange = () => { V.handsFree = cb.checked; store.set("handsFree", V.handsFree); };
+  hf.append(cb, " Hands-free: listen again after she finishes speaking (iPhone may still need a tap)");
+  const sel = mk("select","t");
+  const fill = () => { sel.replaceChildren(); const cur = pickVoice(); TTS.getVoices().filter(v => /^en/i.test(v.lang)).forEach(v => { const o = mk("option",null,v.name+" ("+v.lang+")"); o.value = v.name; if(cur && cur.name === v.name) o.selected = true; sel.append(o); }); };
+  fill(); if("onvoiceschanged" in TTS) TTS.onvoiceschanged = fill;
+  sel.onchange = () => { V.voiceName = sel.value; store.set("voiceName", V.voiceName); };
+  const test = mk("button","btn sec sm","Hear Sally's voice"); test.onclick = () => speak("Hello Tony. This is how I sound.");
+  card.append(hf, sel, test); $("p-settings").append(card);
+})();
 
 /* ---- settings / session ---- */
 function paintSession(){ setText($("s-who"), session ? "Signed in as "+session.user.email : "Not signed in."); $("s-out").style.display = session ? "block":"none"; }
