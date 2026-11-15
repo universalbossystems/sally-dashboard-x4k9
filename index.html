@@ -13,7 +13,7 @@
   .app{position:relative;max-width:520px;height:100dvh;margin:0 auto;overflow:hidden;background:#000}
   .hero{position:absolute;inset:0 0 150px 0;background:url(portrait.jpg) center top/cover no-repeat}
   .hero::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.25),transparent 30%,transparent 70%,#000)}
-  .brand{position:absolute;left:18px;top:calc(10px + env(safe-area-inset-top));font:italic 700 46px/1 "Brush Script MT","Segoe Script",cursive;color:#fff;text-shadow:0 2px 12px #000;z-index:2}
+  .brand{position:absolute;left:16px;top:calc(8px + env(safe-area-inset-top));width:min(150px,38vw);height:auto;z-index:2;filter:drop-shadow(0 2px 8px #000)}
   .bar{position:absolute;left:12px;right:12px;bottom:calc(86px + env(safe-area-inset-bottom));height:60px;border-radius:30px;
        border:2px solid transparent;background:linear-gradient(#0a0f1a,#0a0f1a) padding-box,linear-gradient(90deg,var(--cyan),var(--mag)) border-box;
        display:flex;align-items:center;gap:8px;padding:0 8px 0 18px;z-index:3}
@@ -54,6 +54,7 @@
 <body>
 <div class="app">
   <div class="hero" role="img" aria-label="Sally"></div>
+  <img class="brand" src="logo.png" alt="Sally">
 
   <section class="panel" id="p-chat"><h2>Chat</h2>
     <div class="card nc"><b>Not connected yet.</b><div class="sub" style="margin:6px 0 0">Sally's chat needs her runtime online. It is not hosted anywhere yet, so sending is switched off rather than pretending. Nothing you type here is sent or stored.</div></div></section>
