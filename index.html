@@ -160,6 +160,7 @@
       <button type="button" class="rb" id="camflip" aria-label="Switch camera">&#8635;</button>
       <button type="button" class="rb" id="camshot" aria-label="Take a photo">&#128247;</button>
       <button type="button" class="rb" id="camrec" aria-label="Record a short video">&#9679;</button>
+      <button type="button" class="rb" id="camlen" aria-label="Clip length: 1 minute, tap for 3 minutes" style="font-size:15px">1m</button>
     </div>
   </div>
 
@@ -303,13 +304,19 @@ async function takeFile(f){                           // from the + button, a pa
   } finally { $("plusbtn").disabled = false; $("sendbtn").disabled = false; }
 }
 /* ---- camera: show Sally something (a photo, or a clip of up to a minute). The camera is on only while this screen is open; nothing goes to Sally until Tony presses send. ---- */
-const CAM_MAX_SECONDS = 60, CAM_MAX_BYTES = 14 * 1024 * 1024;
-let camStream = null, camFacing = "environment", camRec = null, camChunks = [], camBytes = 0, camTimer = null, camStarted = 0;
+const CAM_MAX_BYTES = 14 * 1024 * 1024;
+const CAM_PROFILES = {                                 // a long clip must be recorded at a lower quality to stay under the 15 MB limit
+  short: { seconds: 60,  video: 1200000, audio: 64000, width: 1280, height: 720, label: "1m", say: "1 minute, clearer" },
+  long:  { seconds: 180, video: 480000,  audio: 48000, width: 854,  height: 480, label: "3m", say: "3 minutes, lower quality" }
+};
+let camMode = "short", camStream = null, camFacing = "environment", camRec = null, camChunks = [], camBytes = 0, camTimer = null, camStarted = 0;
+const camProfile = () => CAM_PROFILES[camMode];
+const camClock = s => Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
 const camStamp = () => new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
 const camSay = t => setText($("camstatus"), t);
 async function camStart(){
   if(camStream){ camStream.getTracks().forEach(t => t.stop()); camStream = null; }
-  const video = { facingMode: camFacing, width: { ideal: 1280 }, height: { ideal: 720 } };
+  const video = { facingMode: camFacing, width: { ideal: camProfile().width }, height: { ideal: camProfile().height } };
   try { camStream = await navigator.mediaDevices.getUserMedia({ video, audio: true }); }
   catch(e){ try { camStream = await navigator.mediaDevices.getUserMedia({ video, audio: false }); camSay("Camera ready (no sound: the microphone was not allowed)."); }
             catch(e2){ camSay(e2 && e2.name === "NotAllowedError" ? "The camera is blocked. Allow the camera for this page in your browser settings, then try again." : "I could not start the camera on this device."); return false; } }
@@ -336,7 +343,8 @@ function camRecToggle(){
   if(!camStream || typeof MediaRecorder === "undefined") return camSay("This browser cannot record video. Take a photo instead.");
   const type = ["video/mp4;codecs=avc1", "video/mp4", "video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"].find(t => MediaRecorder.isTypeSupported(t)) || "";
   camChunks = []; camBytes = 0;
-  try { camRec = new MediaRecorder(camStream, Object.assign({ videoBitsPerSecond: 1200000, audioBitsPerSecond: 64000 }, type ? { mimeType: type } : {})); }      // a modest bit rate keeps a minute well under the 15 MB limit
+  const prof = camProfile();
+  try { camRec = new MediaRecorder(camStream, Object.assign({ videoBitsPerSecond: prof.video, audioBitsPerSecond: prof.audio }, type ? { mimeType: type } : {})); }      // the profile's bit rate keeps the whole clip under the 15 MB limit
   catch(e){ return camSay("Could not start recording on this device."); }
   camRec.ondataavailable = e => { if(e.data && e.data.size){ camChunks.push(e.data); camBytes += e.data.size; if(camBytes > CAM_MAX_BYTES && camRec && camRec.state === "recording") camRec.stop(); } };
   camRec.onstop = () => {
@@ -347,9 +355,15 @@ function camRecToggle(){
     camClose(); takeFile(new File([blob], "camera-" + camStamp() + (mt.includes("mp4") ? ".mp4" : ".webm"), { type: mt.split(";")[0] }));
   };
   camRec.start(1000); camStarted = Date.now(); $("camrec").classList.add("recording");
-  camTimer = setInterval(() => { const s = Math.floor((Date.now() - camStarted) / 1000); camSay("Recording " + Math.floor(s/60) + ":" + String(s % 60).padStart(2, "0") + " of 1:00. Tap the red button to stop."); if(s >= CAM_MAX_SECONDS && camRec && camRec.state === "recording") camRec.stop(); }, 500);
+  camTimer = setInterval(() => { const s = Math.floor((Date.now() - camStarted) / 1000); camSay("Recording " + camClock(s) + " of " + camClock(prof.seconds) + ". Tap the red button to stop."); if(s >= prof.seconds && camRec && camRec.state === "recording") camRec.stop(); }, 500);
 }
 if(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) $("cambtn").style.display = "";
+$("camlen").onclick = async () => {
+  if(camRec && camRec.state === "recording") return camSay("Stop recording before changing the length.");
+  camMode = camMode === "short" ? "long" : "short"; $("camlen").textContent = camProfile().label;
+  $("camlen").setAttribute("aria-label", "Clip length: " + camProfile().say + ". Tap to change.");
+  camSay("Clips up to " + camProfile().say + "."); await camStart();                       // a different picture size for the new length
+};
 $("cambtn").onclick = camOpen; $("camclose").onclick = camClose; $("camshot").onclick = camShot; $("camrec").onclick = camRecToggle;
 $("camflip").onclick = async () => { camFacing = camFacing === "environment" ? "user" : "environment"; if(camRec && camRec.state === "recording") return camSay("Stop recording before switching cameras."); camSay("Switching camera..."); if(await camStart()) camSay("Point the camera at what you want Sally to see."); };
 document.addEventListener("visibilitychange", () => { if(document.hidden && $("cam").style.display === "flex") camClose(); });          // the camera never stays on in the background
