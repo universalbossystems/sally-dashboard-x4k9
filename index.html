@@ -239,9 +239,10 @@ function chip(text, bad){
   }
 }
 $("plusbtn").onclick = () => { if(!session){ show("chat"); return; } $("fileinput").click(); };
-$("fileinput").onchange = async e => {
-  const f = e.target.files[0]; e.target.value = ""; if(!f) return;
+$("fileinput").onchange = e => { const f = e.target.files[0]; e.target.value = ""; if(f) takeFile(f); };
+async function takeFile(f){                           // from the + button, a pasted screenshot (Ctrl+V) or a dropped file
   if(!sb || !session){ show("chat"); return; }
+  if($("plusbtn").disabled) return;                    // one file at a time: another is still being sent
   pending = null;
   if(f.size < 1){ chip("That file is empty.", true); return; }
   if(f.size > MAX_FILE){ chip("That file is " + (f.size/1048576).toFixed(1) + " MB. The limit is 15 MB. A shorter video or a smaller picture will work.", true); return; }
@@ -260,7 +261,22 @@ $("fileinput").onchange = async e => {
   } catch(err){
     pending = null; chip("I could not send that file: " + (friendly(err) || "please try again."), true);
   } finally { $("plusbtn").disabled = false; $("sendbtn").disabled = false; }
-};
+}
+/* Ctrl+V a screenshot or picture straight into the chat, or drop a file on it. Plain text pastes as usual. Only while the message bar is showing. */
+const barShowing = () => $("chatbar").style.display !== "none";
+const typingElsewhere = () => { const a = document.activeElement; return a && /^(INPUT|TEXTAREA)$/.test(a.tagName) && a !== $("msgbox"); };
+document.addEventListener("paste", e => {
+  const f = Array.from((e.clipboardData && e.clipboardData.files) || [])[0];
+  if(!f || !barShowing() || typingElsewhere()) return;                 // text pastes as usual; a picture pasted into some other box is left alone
+  e.preventDefault();
+  const stamp = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
+  takeFile(f.name && f.name !== "image.png" ? f : new File([f], "screenshot-" + stamp + ".png", { type: f.type || "image/png" }));
+});
+["dragover", "drop"].forEach(ev => document.addEventListener(ev, e => {
+  if(!e.dataTransfer || !Array.from(e.dataTransfer.types || []).includes("Files")) return;
+  e.preventDefault();                                                  // on EVERY tab: otherwise the browser would open the dropped file and leave the dashboard
+  if(ev === "drop" && barShowing() && e.dataTransfer.files[0]) takeFile(e.dataTransfer.files[0]);
+}));
 $("chatbar").addEventListener("submit", async e => {
   e.preventDefault(); const text = $("msgbox").value.trim(); if((!text && !pending) || !sb) return;
   if(!session){ show("chat"); return; }
