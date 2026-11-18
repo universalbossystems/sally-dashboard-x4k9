@@ -23,6 +23,12 @@
   .rb[disabled]{opacity:.55;cursor:not-allowed}
   .chip{position:absolute;left:14px;right:14px;bottom:calc(152px + env(safe-area-inset-bottom));z-index:6;display:none;align-items:center;gap:8px;padding:8px 12px;border-radius:14px;border:1px solid var(--cyan);background:#0a1220;color:var(--text);font-size:14px}
   .chip.bad{border-color:var(--red);color:var(--red)}
+  .cam{position:fixed;left:0;right:0;top:0;bottom:0;z-index:50;background:#000;display:none;flex-direction:column}
+  .cam video{flex:1;width:100%;min-height:0;object-fit:contain;background:#000}
+  .camtop{position:absolute;top:calc(8px + env(safe-area-inset-top));left:12px;right:12px;display:flex;justify-content:space-between;align-items:center;gap:10px;color:#fff;font-size:15px;text-shadow:0 1px 4px #000;z-index:2}
+  .camctl{display:flex;justify-content:center;gap:22px;padding:16px 12px calc(22px + env(safe-area-inset-bottom));background:rgba(0,0,0,.65)}
+  .camctl .rb{width:64px;height:64px;font-size:22px}
+  .camctl .rb.recording{background:#e5484d;border-color:#e5484d;color:#fff;animation:vpulse 1.2s infinite}
   .chipx{margin-left:auto;background:none;border:0;color:inherit;font-size:18px;line-height:1;cursor:pointer;padding:2px 6px}
   .rb.on{background:var(--cyan);color:#001b1d}
   .rb.pulse{animation:vpulse 1.2s infinite}
@@ -140,11 +146,22 @@
   <div class="chip" id="attachchip" role="status" aria-live="polite"></div>
   <form class="bar" id="chatbar" autocomplete="off">
     <button type="button" class="rb" id="plusbtn" aria-label="Add file"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+    <button type="button" class="rb" id="cambtn" aria-label="Use the camera" style="display:none"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a2 2 0 0 1 2-2h2l1.5-2h7L17 6h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.5"/></svg></button>
     <input type="file" id="fileinput" style="display:none">
     <input id="msgbox" placeholder="Message Sally..." aria-label="Message Sally" maxlength="2000">
     <button type="button" class="rb" id="voicebtn" aria-label="Talk to Sally"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
     <button type="submit" class="rb" id="sendbtn" aria-label="Send"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M21 3 3 10l7 3 3 7z"/></svg></button>
   </form>
+
+  <div class="cam" id="cam" role="dialog" aria-label="Camera">
+    <div class="camtop"><span id="camstatus">Point the camera at what you want Sally to see.</span><button type="button" class="rb" id="camclose" aria-label="Close the camera">&#10005;</button></div>
+    <video id="camvideo" autoplay playsinline muted></video>
+    <div class="camctl">
+      <button type="button" class="rb" id="camflip" aria-label="Switch camera">&#8635;</button>
+      <button type="button" class="rb" id="camshot" aria-label="Take a photo">&#128247;</button>
+      <button type="button" class="rb" id="camrec" aria-label="Record a short video">&#9679;</button>
+    </div>
+  </div>
 
   <nav class="nav" id="nav">
     <button data-t="home" class="on"><svg viewBox="0 0 24 24"><path d="M3 11 12 3l9 8M5 10v10h14V10"/></svg>Home</button>
@@ -285,6 +302,58 @@ async function takeFile(f){                           // from the + button, a pa
     pending = null; chip("I could not send that file: " + (friendly(err) || "please try again."), true);
   } finally { $("plusbtn").disabled = false; $("sendbtn").disabled = false; }
 }
+/* ---- camera: show Sally something (a photo, or a clip of up to a minute). The camera is on only while this screen is open; nothing goes to Sally until Tony presses send. ---- */
+const CAM_MAX_SECONDS = 60, CAM_MAX_BYTES = 14 * 1024 * 1024;
+let camStream = null, camFacing = "environment", camRec = null, camChunks = [], camBytes = 0, camTimer = null, camStarted = 0;
+const camStamp = () => new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
+const camSay = t => setText($("camstatus"), t);
+async function camStart(){
+  if(camStream){ camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+  const video = { facingMode: camFacing, width: { ideal: 1280 }, height: { ideal: 720 } };
+  try { camStream = await navigator.mediaDevices.getUserMedia({ video, audio: true }); }
+  catch(e){ try { camStream = await navigator.mediaDevices.getUserMedia({ video, audio: false }); camSay("Camera ready (no sound: the microphone was not allowed)."); }
+            catch(e2){ camSay(e2 && e2.name === "NotAllowedError" ? "The camera is blocked. Allow the camera for this page in your browser settings, then try again." : "I could not start the camera on this device."); return false; } }
+  $("camvideo").srcObject = camStream; return true;
+}
+async function camOpen(){
+  if(!session){ show("chat"); return; }
+  $("cam").style.display = "flex"; camSay("Starting the camera...");
+  if(await camStart()) camSay("Point the camera at what you want Sally to see.");
+}
+function camClose(){
+  if(camRec && camRec.state !== "inactive"){ camRec.onstop = null; try { camRec.stop(); } catch(e){} }
+  camRec = null; clearInterval(camTimer); camTimer = null; camChunks = []; camBytes = 0;
+  if(camStream){ camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+  $("camvideo").srcObject = null; $("cam").style.display = "none"; $("camrec").classList.remove("recording");
+}
+function camShot(){
+  const v = $("camvideo"); if(!camStream || !v.videoWidth) return camSay("The camera is not ready yet.");
+  const c = document.createElement("canvas"); c.width = v.videoWidth; c.height = v.videoHeight; c.getContext("2d").drawImage(v, 0, 0, c.width, c.height);
+  c.toBlob(blob => { if(!blob) return camSay("Could not take the photo."); camClose(); takeFile(new File([blob], "camera-" + camStamp() + ".jpg", { type: "image/jpeg" })); }, "image/jpeg", 0.85);
+}
+function camRecToggle(){
+  if(camRec && camRec.state === "recording"){ camRec.stop(); return; }
+  if(!camStream || typeof MediaRecorder === "undefined") return camSay("This browser cannot record video. Take a photo instead.");
+  const type = ["video/mp4;codecs=avc1", "video/mp4", "video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"].find(t => MediaRecorder.isTypeSupported(t)) || "";
+  camChunks = []; camBytes = 0;
+  try { camRec = new MediaRecorder(camStream, Object.assign({ videoBitsPerSecond: 1200000, audioBitsPerSecond: 64000 }, type ? { mimeType: type } : {})); }      // a modest bit rate keeps a minute well under the 15 MB limit
+  catch(e){ return camSay("Could not start recording on this device."); }
+  camRec.ondataavailable = e => { if(e.data && e.data.size){ camChunks.push(e.data); camBytes += e.data.size; if(camBytes > CAM_MAX_BYTES && camRec && camRec.state === "recording") camRec.stop(); } };
+  camRec.onstop = () => {
+    clearInterval(camTimer); camTimer = null; const mt = (camRec && camRec.mimeType) || type || "video/webm"; $("camrec").classList.remove("recording");
+    const blob = new Blob(camChunks, { type: mt }); camChunks = [];
+    if(!blob.size) return camSay("Nothing was recorded.");
+    if(blob.size > MAX_FILE) return camSay("That clip is too big (" + (blob.size/1048576).toFixed(1) + " MB, the limit is 15 MB). Record a shorter one.");
+    camClose(); takeFile(new File([blob], "camera-" + camStamp() + (mt.includes("mp4") ? ".mp4" : ".webm"), { type: mt.split(";")[0] }));
+  };
+  camRec.start(1000); camStarted = Date.now(); $("camrec").classList.add("recording");
+  camTimer = setInterval(() => { const s = Math.floor((Date.now() - camStarted) / 1000); camSay("Recording " + Math.floor(s/60) + ":" + String(s % 60).padStart(2, "0") + " of 1:00. Tap the red button to stop."); if(s >= CAM_MAX_SECONDS && camRec && camRec.state === "recording") camRec.stop(); }, 500);
+}
+if(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) $("cambtn").style.display = "";
+$("cambtn").onclick = camOpen; $("camclose").onclick = camClose; $("camshot").onclick = camShot; $("camrec").onclick = camRecToggle;
+$("camflip").onclick = async () => { camFacing = camFacing === "environment" ? "user" : "environment"; if(camRec && camRec.state === "recording") return camSay("Stop recording before switching cameras."); camSay("Switching camera..."); if(await camStart()) camSay("Point the camera at what you want Sally to see."); };
+document.addEventListener("visibilitychange", () => { if(document.hidden && $("cam").style.display === "flex") camClose(); });          // the camera never stays on in the background
+
 /* Ctrl+V a screenshot or picture straight into the chat, or drop a file on it. Plain text pastes as usual. Only while the message bar is showing. */
 const barShowing = () => $("chatbar").style.display !== "none";
 const typingElsewhere = () => { const a = document.activeElement; return a && /^(INPUT|TEXTAREA)$/.test(a.tagName) && a !== $("msgbox"); };
