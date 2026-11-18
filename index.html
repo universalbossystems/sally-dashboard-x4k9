@@ -129,6 +129,11 @@
 
   <section class="panel" id="p-settings"><h2>Settings</h2>
     <div class="card"><div id="s-who" class="sub" style="margin:0">Not signed in.</div></div>
+    <div class="card" id="s-pw" style="display:none"><b>Set or change your password</b>
+      <div class="sub">So you can sign in from any browser without waiting for an email. At least 12 characters. Only you ever see it.</div>
+      <input class="t" id="s-pw1" type="password" autocomplete="new-password" placeholder="new password (12 or more characters)">
+      <input class="t" id="s-pw2" type="password" autocomplete="new-password" placeholder="type it again">
+      <button class="btn sec" id="s-pw-save">Save password</button><div class="msg" id="s-pw-msg"></div></div>
     <button class="btn sec" id="s-out" style="display:none">Sign out</button>
   </section>
 
@@ -166,6 +171,13 @@ const ICON_OPEN   = '<svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" heig
 function setText(el, t){ el.textContent = t; }
 function mk(tag, cls, text){ const e=document.createElement(tag); if(cls) e.className=cls; if(text!==undefined) e.textContent=text; return e; }
 function say(el, text, kind){ el.className = "msg"+(kind?" "+kind:""); setText(el, text); }
+function authMsg(err){
+  const m = (err && err.message) || "";
+  if(/rate limit/i.test(m)) return "Too many sign-in emails for now (the free allowance is only a few an hour). If you were already signed in in another browser or window, open the dashboard there. Otherwise sign in with your password, or wait about an hour.";
+  if(/invalid login credentials/i.test(m)) return "That email or password is not right. If you have not set a password yet, use the sign-in link once, then set one in Settings.";
+  if(/signups? not allowed|not allowed for otp/i.test(m)) return "That email is not allowed to sign in here.";
+  return "Could not sign in: " + m;
+}
 function friendly(err){ return err && err.message === "Founder sign-in required" ? "Refused: this sign-in is not the Founder's." : (err ? err.message : ""); }
 
 /* ---- tabs ---- */
@@ -186,17 +198,28 @@ $("nav").addEventListener("click", e => { const b=e.target.closest("button"); if
 function signInBox(container){
   container.replaceChildren();
   const c = mk("div","card");
-  c.append(mk("b",null,"Sign in as Tony"), mk("div","sub","Enter your email. A sign-in link is sent to you. Only the Founder's email can use this."));
+  c.append(mk("b",null,"Sign in as Tony"), mk("div","sub","Sign in with your password, or have a one-time link emailed to you (only a few are allowed an hour, so a password is easier). Only the Founder's email can use this."));
   const em = mk("input","t"); em.type="email"; em.placeholder="your email"; em.autocomplete="email";
-  const b = mk("button","btn sec","Send sign-in link"); const m = mk("div","msg");
+  const pw = mk("input","t"); pw.type="password"; pw.placeholder="password (once you have set one)"; pw.autocomplete="current-password";
+  const pb = mk("button","btn","Sign in with password");
+  const b = mk("button","btn sec","Send me a sign-in link instead"); const m = mk("div","msg");
+  const withPassword = async () => {
+    if(!em.value.includes("@") || !pw.value) return say(m,"Enter your email and your password.","err");
+    pb.disabled = true; say(m,"Signing in…");
+    const { error } = await sb.auth.signInWithPassword({ email: em.value.trim(), password: pw.value });
+    pb.disabled = false; pw.value = "";
+    error ? say(m, authMsg(error), "err") : say(m,"Signed in.","ok");
+  };
+  pb.onclick = withPassword;
+  pw.addEventListener("keydown", e => { if(e.key === "Enter"){ e.preventDefault(); withPassword(); } });
   b.onclick = async () => {
     if(!em.value.includes("@")) return say(m,"Enter your email address.","err");
     b.disabled = true; say(m,"Sending…");
-    const { error } = await sb.auth.signInWithOtp({ email: em.value.trim(), options:{ emailRedirectTo: location.origin + location.pathname, shouldCreateUser: true }});
+    const { error } = await sb.auth.signInWithOtp({ email: em.value.trim(), options:{ emailRedirectTo: location.origin + location.pathname, shouldCreateUser: false }});   // never makes a new account, so a stranger cannot use up the small hourly email allowance
     b.disabled = false;
-    error ? say(m,"Could not send: "+error.message,"err") : say(m,"Link sent. Open it on this device.","ok");
+    error ? say(m, authMsg(error), "err") : say(m,"Link sent. Open it in THIS browser (if your email app opens it somewhere else, copy the link and paste it here).","ok");
   };
-  c.append(em,b,m); container.append(c);
+  c.append(em,pw,pb,b,m); container.append(c);
 }
 function gate(inId, outId){ const s=!!session; $(inId).style.display = s?"block":"none"; $(outId).style.display = s?"none":"block"; if(!s && !$(outId).firstElementChild) signInBox($(outId)); return s; }   /* build the box once; rebuilding it every refresh wiped what was being typed */
 
@@ -523,7 +546,16 @@ $("voicebtn").onclick = () => {
 })();
 
 /* ---- settings / session ---- */
-function paintSession(){ setText($("s-who"), session ? "Signed in as "+session.user.email : "Not signed in."); $("s-out").style.display = session ? "block":"none"; }
+function paintSession(){ setText($("s-who"), session ? "Signed in as "+session.user.email : "Not signed in."); $("s-out").style.display = session ? "block":"none"; $("s-pw").style.display = session ? "block":"none"; }
+$("s-pw-save").onclick = async () => {
+  const a = $("s-pw1").value, b = $("s-pw2").value, m = $("s-pw-msg");
+  if(a.length < 12) return say(m, "Use at least 12 characters.", "err");
+  if(a !== b) return say(m, "The two do not match.", "err");
+  $("s-pw-save").disabled = true; say(m, "Saving...");
+  const { error } = await sb.auth.updateUser({ password: a });
+  $("s-pw-save").disabled = false; $("s-pw1").value = ""; $("s-pw2").value = "";                 // never kept on the page
+  error ? say(m, error.message || "Could not save the password.", "err") : say(m, "Password saved. You can now sign in with it from any browser.", "ok");
+};
 $("s-out").onclick = async () => { await sb.auth.signOut(); };
 
 async function init(){
