@@ -21,6 +21,9 @@
   .bar input::placeholder{color:#b9c4d6}
   .rb{width:44px;height:44px;border-radius:50%;border:1.5px solid var(--cyan);background:#0a1220;color:var(--cyan);display:grid;place-items:center;cursor:pointer}
   .rb[disabled]{opacity:.55;cursor:not-allowed}
+  .chip{position:absolute;left:14px;right:14px;bottom:calc(152px + env(safe-area-inset-bottom));z-index:6;display:none;align-items:center;gap:8px;padding:8px 12px;border-radius:14px;border:1px solid var(--cyan);background:#0a1220;color:var(--text);font-size:14px}
+  .chip.bad{border-color:var(--red);color:var(--red)}
+  .chipx{margin-left:auto;background:none;border:0;color:inherit;font-size:18px;line-height:1;cursor:pointer;padding:2px 6px}
   .rb.on{background:var(--cyan);color:#001b1d}
   .rb.pulse{animation:vpulse 1.2s infinite}
   @keyframes vpulse{0%,100%{box-shadow:0 0 0 0 rgba(25,230,240,.55)}50%{box-shadow:0 0 0 9px rgba(25,230,240,0)}}
@@ -129,7 +132,10 @@
     <button class="btn sec" id="s-out" style="display:none">Sign out</button>
   </section>
 
+  <div class="chip" id="attachchip" role="status" aria-live="polite"></div>
   <form class="bar" id="chatbar" autocomplete="off">
+    <button type="button" class="rb" id="plusbtn" aria-label="Add file"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+    <input type="file" id="fileinput" style="display:none">
     <input id="msgbox" placeholder="Message Sally..." aria-label="Message Sally" maxlength="2000">
     <button type="button" class="rb" id="voicebtn" aria-label="Talk to Sally"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
     <button type="submit" class="rb" id="sendbtn" aria-label="Send"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M21 3 3 10l7 3 3 7z"/></svg></button>
@@ -169,6 +175,7 @@ function show(t){
   document.querySelectorAll(".panel").forEach(p => p.classList.remove("show"));
   if(t!=="home") $("p-"+t).classList.add("show");
   $("chatbar").style.display = (t==="home"||t==="chat") ? "flex" : "none";
+  if($("attachchip").dataset.on) $("attachchip").style.display = (t==="home"||t==="chat") ? "flex" : "none";
   clearInterval(chatTimer);
   if(t==="access") refresh(); if(t==="activity") loadHistory(); if(t==="memory") memInit();
   if(t==="chat"){ chatLoad(); chatTimer = setInterval(chatLoad, 8000); }
@@ -202,20 +209,68 @@ async function chatLoad(){
   const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
   list.replaceChildren();
   if(!data.messages.length) list.append(mk("div","sub","Say hello. Sally answers from her hosted home; nothing runs on your PC or Mac."));
-  data.messages.forEach(m => { const b = mk("div","bub "+(m.speaker==="sally"?"sally":"me"), m.text);
+  data.messages.forEach(m => {
+    let display = m.text;
+    try {
+      const d = JSON.parse(m.text);
+      if(d && (d.text !== undefined || d.files)) {
+        display = (d.text || "") + (d.files ? " [" + d.files.length + " file(s)]" : "");
+        if(!display.trim() && d.files) display = "[" + d.files.length + " file(s)]";
+      }
+    } catch(e){}
+    const b = mk("div","bub "+(m.speaker==="sally"?"sally":"me"), display);
     b.append(mk("small",null, new Date(m.at).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}) + (m.model_used ? " · "+m.model_used : "") + (m.state==="pending"||m.state==="claimed" ? " · waiting for Sally" : "")));
     list.append(b); });
   say($("c-msg"), data.waiting>0 ? "Sally has "+data.waiting+" message(s) waiting. Her hosted runtime checks about every 30 minutes." : "");
   if(atBottom) box.scrollTop = box.scrollHeight;
 }
+/* ---- files: the + button sends Sally a picture, screenshot, video, PDF or other file (a private bucket only the Founder can add to; 15 MB each) ---- */
+const MAX_FILE = 15 * 1024 * 1024;
+let pending = null;                                   // { id, name } once a file is uploaded and registered
+function chip(text, bad){
+  const c = $("attachchip");
+  if(!text){ c.dataset.on = ""; c.style.display = "none"; c.replaceChildren(); return; }
+  c.dataset.on = "1"; c.style.display = "flex"; c.className = "chip" + (bad ? " bad" : "");
+  c.replaceChildren(mk("span", null, text));
+  if(pending){
+    const x = mk("button", "chipx", "\u2715"); x.type = "button"; x.setAttribute("aria-label", "Remove the file");
+    x.onclick = () => { pending = null; chip(""); $("msgbox").placeholder = "Message Sally..."; };
+    c.append(x);
+  }
+}
+$("plusbtn").onclick = () => { if(!session){ show("chat"); return; } $("fileinput").click(); };
+$("fileinput").onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ""; if(!f) return;
+  if(!sb || !session){ show("chat"); return; }
+  pending = null;
+  if(f.size < 1){ chip("That file is empty.", true); return; }
+  if(f.size > MAX_FILE){ chip("That file is " + (f.size/1048576).toFixed(1) + " MB. The limit is 15 MB. A shorter video or a smaller picture will work.", true); return; }
+  chip("Sending " + f.name + " ..."); $("plusbtn").disabled = true; $("sendbtn").disabled = true;
+  try {
+    const safe = (f.name.normalize("NFKD").replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^_+/, "").slice(-80)) || "file";
+    const path = "founder/" + crypto.randomUUID() + "-" + safe;
+    const type = f.type || "application/octet-stream";
+    const up = await sb.storage.from("tony-uploads").upload(path, f, { contentType: type, upsert: false });
+    if(up.error) throw up.error;
+    const reg = await sb.rpc("founder_attachment_register", { p_path: path, p_filename: f.name.slice(0, 200), p_type: type, p_size: f.size });
+    if(reg.error) throw reg.error;
+    pending = { id: reg.data, name: f.name };
+    chip("\uD83D\uDCCE " + f.name + " is ready. Add a message, or just press send.");
+    $("msgbox").placeholder = "Add a message, or press send";
+  } catch(err){
+    pending = null; chip("I could not send that file: " + (friendly(err) || "please try again."), true);
+  } finally { $("plusbtn").disabled = false; $("sendbtn").disabled = false; }
+};
 $("chatbar").addEventListener("submit", async e => {
-  e.preventDefault(); const text = $("msgbox").value.trim(); if(!text || !sb) return;
+  e.preventDefault(); const text = $("msgbox").value.trim(); if((!text && !pending) || !sb) return;
   if(!session){ show("chat"); return; }
   $("sendbtn").disabled = true;
-  const { error } = await sb.rpc("founder_chat_send", { p_text: text });
+  const args = { p_text: text }; if(pending) args.p_attachment_id = pending.id;
+  const { error } = await sb.rpc("founder_chat_send", args);
   $("sendbtn").disabled = false;
   if(error){ show("chat"); say($("c-msg"), friendly(error), "err"); return; }
-  $("msgbox").value = ""; show("chat");
+  pending = null; chip(""); $("msgbox").placeholder = "Message Sally..."; $("msgbox").value = ""; show("chat");
+  chatLoad();
 });
 
 /* ---- memory (Sally's existing sally_remember / recall_text / correct / forget) ---- */
