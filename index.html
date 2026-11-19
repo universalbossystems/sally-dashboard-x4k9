@@ -140,6 +140,9 @@
       <input class="t" id="s-pw1" type="password" autocomplete="new-password" placeholder="new password (12 or more characters)">
       <input class="t" id="s-pw2" type="password" autocomplete="new-password" placeholder="type it again">
       <button class="btn sec" id="s-pw-save">Save password</button><div class="msg" id="s-pw-msg"></div></div>
+    <div class="card" id="s-nodes" style="display:none"><b>Connect a machine</b>
+      <div class="sub">A new machine asks to join and shows a short code on its own screen. If the same code is shown here, tap Approve. If you did not just set up a machine, tap Refuse.</div>
+      <div id="s-nodes-list"></div><div class="msg" id="s-nodes-msg"></div></div>
     <button class="btn sec" id="s-out" style="display:none">Sign out</button>
   </section>
 
@@ -201,6 +204,7 @@ function friendly(err){ return err && err.message === "Founder sign-in required"
 /* ---- tabs ---- */
 function show(t){
   tab = t;
+  if(t==="settings" && sb && session) nodesLoad();
   document.querySelectorAll(".nav button").forEach(b => b.classList.toggle("on", b.dataset.t===t));
   document.querySelectorAll(".panel").forEach(p => p.classList.remove("show"));
   if(t!=="home") $("p-"+t).classList.add("show");
@@ -640,6 +644,27 @@ $("s-pw-save").onclick = async () => {
   error ? say(m, error.message || "Could not save the password.", "err") : say(m, "Password saved. You can now sign in with it from any browser.", "ok");
 };
 $("s-out").onclick = async () => { await sb.auth.signOut(); };
+
+/* ---- connect a machine: Tony approves a new node by matching its code ---- */
+async function nodesLoad(){
+  const box = $("s-nodes"), list = $("s-nodes-list");
+  box.style.display = session ? "block" : "none";
+  if(!session) return;
+  const { data, error } = await sb.rpc("founder_worker_pending");
+  if(error){ say($("s-nodes-msg"), "Could not check for new machines.", "err"); return; }
+  list.replaceChildren();
+  if(!data.length){ list.append(mk("div","sub","No machine is asking to join right now.")); return; }
+  data.forEach(n => {
+    const row = mk("div","card"); row.append(mk("div",null,n.worker+"   code "+n.code));
+    const yes = mk("button","btn sm","Approve"), no = mk("button","btn sec sm","Refuse");
+    const decide = async ok => { yes.disabled = no.disabled = true;
+      const r = await sb.rpc("founder_worker_decide", { p_code: n.code, p_approve: ok });
+      say($("s-nodes-msg"), r.error ? (r.error.message || "That did not work.") : (ok ? n.worker+" is connected. It starts working within a minute." : n.worker+" was refused."), r.error ? "err" : "ok");
+      nodesLoad(); };
+    yes.onclick = () => decide(true); no.onclick = () => decide(false);
+    row.append(yes, no); list.append(row); });
+}
+setInterval(() => { if(session && tab==="settings" && !document.hidden) nodesLoad(); }, 10000);
 
 async function init(){
   if(!window.supabase){ setText($("s-who"),"Could not load the sign-in library. Check your connection."); return; }
