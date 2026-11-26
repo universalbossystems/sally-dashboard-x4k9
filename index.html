@@ -638,6 +638,25 @@ $("voicebtn").onclick = () => {
   card.append(hf, sel, test); $("p-settings").append(card);
 })();
 
+
+/* ---- settings: let Sally's own wording be updated (Tony's button; creates the one-use founder approvals her database asks for) ---- */
+(function(){
+  const card = mk("div","card"), msg = mk("div","msg"), b = mk("button","btn unl","Allow the layers wording change");
+  card.append(mk("h3",null,"Sally's identity wording"),
+    mk("div","sub","Her identity and notes still say she lives on the free Supabase. Pressing this gives ONE approval for each of 3 wording changes: her identity note (Mac then PC is her home), and her two Supabase notes (free = her lab, paid = backup). Nothing else changes and no permission moves. Only you can press it."),
+    b, msg);
+  b.onclick = async () => {
+    if(!sb || !session){ say(msg, "Sign in first.", "err"); return; }
+    b.disabled = true; say(msg, "Saving…");
+    for(const scope of ["identity:UPDATE", "resource_policy:UPDATE", "resource_policy:UPDATE"]){
+      const { error } = await sb.rpc("founder_grant_approval", { p_scope: scope, p_reason: "Tony: layers wording fix (card a00207db)" });
+      if(error){ b.disabled = false; say(msg, friendly(error), "err"); return; }
+    }
+    say(msg, "Done. Tell Claude: approvals given.");
+  };
+  $("p-settings").append(card);
+})();
+
 /* ---- settings / session ---- */
 function paintSession(){ setText($("s-who"), session ? "Signed in as "+session.user.email : "Not signed in."); $("s-out").style.display = session ? "block":"none"; $("s-pw").style.display = session ? "block":"none"; }
 $("s-pw-save").onclick = async () => {
