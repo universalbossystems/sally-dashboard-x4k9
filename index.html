@@ -41,6 +41,10 @@
   .nav button.on{color:var(--cyan)}
   .nav button.on::after{content:"";position:absolute;bottom:6px;width:34px;height:2px;background:var(--cyan)}
   #tabAccess.unlocked{color:var(--green)} #tabAccess.locked{color:var(--amber)}
+  .nav button.wait, #tabAccess.wait{color:var(--cyan)}               /* a card is waiting for Tony: the Merge cards tab lights up cyan on any tab, over the lock colours, until he answers */
+  .nav button.wait::before{content:"";position:absolute;top:6px;right:calc(50% - 22px);width:9px;height:9px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px var(--cyan);animation:cardwait 1.6s ease-in-out infinite}
+  @keyframes cardwait{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.75)}}
+  @media (prefers-reduced-motion:reduce){.nav button.wait::before{animation:none}}
   .panel{position:absolute;top:0;right:0;bottom:82px;left:0;background:var(--panel);z-index:5;padding:calc(18px + env(safe-area-inset-top)) 18px 18px;overflow:auto;display:none}
   .panel.show{display:block}
   .panel.chatp{padding-bottom:84px}
@@ -126,7 +130,8 @@
 
   <section class="panel" id="p-activity"><h2>Activity</h2>
     <div class="sub">Every lock change, recorded.</div>
-    <div id="act-in" style="display:none"><div class="card" id="act-list"></div><div class="msg err" id="act-msg"></div></div>
+    <div id="act-in" style="display:none"><div class="card" id="act-list"></div><div class="msg err" id="act-msg"></div>
+      <h2 style="margin-top:18px">Reports from Sally</h2><div class="sub">Her daily report and health checks, newest first.</div><div class="card" id="act-reports"></div></div>
     <div id="act-out" style="display:none"></div>
   </section>
 
@@ -243,6 +248,7 @@ function signInBox(container){
 function gate(inId, outId){ const s=!!session; $(inId).style.display = s?"block":"none"; $(outId).style.display = s?"none":"block"; if(!s) signInBox($(outId)); return s; }   /* the same box, moved to this tab; never rebuilt, so what was being typed stays */
 
 /* ---- chat ---- */
+const REPORT_SENDERS = new Set(["daily-report", "hourly-check", "status-report"]);      /* her own reports belong in Activity, not in the conversation (Tony, 28 Nov) */
 async function chatLoad(){
   if(!sb || !gate("c-in","c-out")) return;
   const { data, error } = await sb.rpc("founder_chat_history", { p_limit: 60 });
@@ -250,8 +256,9 @@ async function chatLoad(){
   const list = $("c-list"); const box = list.parentElement.parentElement;
   const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
   list.replaceChildren();
-  if(!data.messages.length) list.append(mk("div","sub","Say hello. Sally answers from her hosted home; nothing runs on your PC or Mac."));
-  data.messages.forEach(m => {
+  const talk = data.messages.filter(m => !REPORT_SENDERS.has(m.model_used));
+  if(!talk.length) list.append(mk("div","sub","Say hello. Sally answers from her hosted home; nothing runs on your PC or Mac."));
+  talk.forEach(m => {
     let display = m.text;
     try {
       const d = JSON.parse(m.text);
@@ -282,6 +289,13 @@ function chip(text, bad){
 }
 $("plusbtn").onclick = () => { if(!session){ show("chat"); return; } $("fileinput").click(); };
 $("fileinput").onchange = e => { const f = e.target.files[0]; e.target.value = ""; if(f) takeFile(f); };
+/* a random id that also works on a plain http page (a phone only offers crypto.randomUUID on https); the stored name needs lower-case hex in 8-4-4-4-12 form */
+function uuid4(){
+  if(window.crypto && crypto.randomUUID) return crypto.randomUUID();
+  const b = crypto.getRandomValues(new Uint8Array(16)); b[6] = (b[6] & 0x0f) | 0x40; b[8] = (b[8] & 0x3f) | 0x80;
+  const h = Array.from(b, x => x.toString(16).padStart(2, "0")).join("");
+  return h.slice(0,8) + "-" + h.slice(8,12) + "-" + h.slice(12,16) + "-" + h.slice(16,20) + "-" + h.slice(20);
+}
 async function takeFile(f){                           // from the + button, a pasted screenshot (Ctrl+V) or a dropped file
   if(!sb || !session){ show("chat"); return; }
   if($("plusbtn").disabled) return;                    // one file at a time: another is still being sent
@@ -291,7 +305,7 @@ async function takeFile(f){                           // from the + button, a pa
   chip("Sending " + f.name + " ..."); $("plusbtn").disabled = true; $("sendbtn").disabled = true;
   try {
     const safe = (f.name.normalize("NFKD").replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^_+/, "").slice(-80)) || "file";
-    const path = "founder/" + crypto.randomUUID() + "-" + safe;
+    const path = "founder/" + uuid4() + "-" + safe;
     const type = f.type || "application/octet-stream";
     const up = await sb.storage.from("tony-uploads").upload(path, f, { contentType: type, upsert: false });
     if(up.error) throw up.error;
@@ -441,6 +455,7 @@ $("m-search").onclick = async () => {
 function paintTab(){                                          /* the tab shows how many cards are waiting */
   const n = askList.length;
   setText($("tabCardsName"), n ? "Merge cards (" + n + ")" : "Merge cards");
+  $("tabAccess").classList.toggle("wait", n > 0);               /* lit cyan while any card waits */
 }
 function wipeSignedOut(){                                      /* signing out leaves nothing of Sally's cards or the password on the page */
   askList = []; $("mc-pending").replaceChildren(); $("mc-recent").replaceChildren(); setText($("mc-msg"), "");
@@ -484,8 +499,17 @@ async function refresh(){
 }
 
 /* ---- activity ---- */
+async function loadReports(){
+  const box = $("act-reports"); if(!box) return; box.replaceChildren();
+  const { data, error } = await sb.rpc("founder_chat_history", { p_limit: 200 });
+  if(error || !data) { box.append(mk("div","sub","Reports could not be loaded just now.")); return; }
+  const reports = data.messages.filter(m => REPORT_SENDERS.has(m.model_used)).slice(-20).reverse();
+  if(!reports.length){ box.append(mk("div","sub","No reports yet.")); return; }
+  reports.forEach(m => { const row = mk("div","row"); const body = mk("div"); body.style.whiteSpace = "pre-wrap"; body.append(mk("b",null,(m.model_used || "report").replace("-"," "))); body.append(mk("div","sub",m.text)); row.append(body, mk("div","when", new Date(m.at).toLocaleString())); box.append(row); });
+}
 async function loadHistory(){
   if(!sb || !gate("act-in","act-out")) return;
+  loadReports();
   const { data, error } = await sb.rpc("founder_lock_history", { p_limit: 30 });
   const list = $("act-list"); list.replaceChildren();
   if(error){ setText($("act-msg"), error.message); return; } setText($("act-msg"),"");
